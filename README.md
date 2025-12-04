@@ -1,38 +1,39 @@
 # PostgREST Fetch Client
 
-一個輕量、型別安全且支援 [Standard Schema](https://github.com/standard-schema/standard-schema) 的 PostgREST (Supabase) HTTP 客戶端封裝。
+A lightweight, type-safe HTTP client wrapper for PostgREST (Supabase) with [Standard Schema](https://github.com/standard-schema/standard-schema) support.
 
-這不是一個完整的 ORM，而是一個強化的 `fetch` 包裝器，專為 PostgREST API 設計，讓你能輕鬆處理認證、URL 參數組合以及執行時期的資料驗證 (Runtime Validation)。
+This is not a full-fledged ORM, but rather an enhanced `fetch` wrapper designed specifically for PostgREST APIs, making it easy to handle authentication, URL parameter composition, and runtime data validation.
 
-## ✨ 特色
+## ✨ Features
 
-* **🔒 Type-Safe & Runtime Validation**: 原生支援 Standard Schema (相容 Valibot, Zod, ArkType 等)，確保 API 回傳資料符合預期。
-* **🎨 Options Object API**: 使用現代化的參數物件模式，語法清晰且易於擴充。
-* **🛡️ Error Handling**: 自動解析 PostgREST 標準錯誤格式，提供強型別的錯誤物件。
-* **⚡ Lightweight**: 基於原生 `fetch` API，無多餘依賴。
-* **🔑 Token Management**: 支援全域 Token 設定與單次請求覆寫。
+* **🔒 Type-Safe & Runtime Validation**: Native support for Standard Schema (compatible with Valibot, Zod, ArkType, etc.), ensuring API responses match expectations.
+* **🎨 Options Object API**: Modern parameter object pattern with clear, easily extensible syntax.
+* **🛡️ Error Handling**: Automatically parses PostgREST standard error format, providing strongly-typed error objects.
+* **⚡ Lightweight**: Built on native `fetch` API with no extra dependencies.
+* **🔑 Token Management**: Supports global token configuration and per-request override.
+* **🧹 Smart Params**: Automatically filters out undefined or null query parameters for more flexible conditional queries.
 
-## 📦 安裝
+## 📦 Installation
 
 ```bash
 npm install @youmin1017/postgrest
 ```
 
-## 🚀 快速開始
+## 🚀 Quick Start
 
-### 1\. 初始化 Client
+### 1. Initialize Client
 
 ```typescript
-import { PostgrestClient } from "your-package-name";
+import { PostgrestClient } from "@youmin1017/postgrest";
 
-// 初始化時可傳入 Base URL 和選填的預設 Token
+// Initialize with Base URL and optional default Token
 const client = new PostgrestClient(
   "https://your-project.example.com",
   "YOUR_JWT_TOKEN"
 );
 ```
 
-### 2\. 定義 Schema (使用 Valibot 為例)
+### 2. Define Schema (Using Valibot as example)
 
 ```typescript
 import * as v from "valibot";
@@ -47,24 +48,32 @@ const UserSchema = v.object({
 type User = v.InferOutput<typeof UserSchema>;
 ```
 
-### 3\. 發送請求
+### 3. Making Requests
 
-#### GET 請求 (帶驗證)
+#### GET Request (With Validation and Dynamic Parameters)
 
 ```typescript
-// 自動推斷回傳型別為 User[]
+// Assume this variable might be undefined
+const searchId = undefined;
+
+// Return type is automatically inferred as User[]
 const users = await client.get({
   endpoint: "/users",
-  params: { select: "*" },
-  schema: v.array(UserSchema), // 傳入 Schema 進行驗證
+  params: { 
+    select: "*",
+    // Supports passing numbers directly, undefined values are automatically filtered out
+    id: searchId ? `eq.${searchId}` : undefined, 
+    active: true // Supports boolean, automatically converted to string "true"
+  },
+  schema: v.array(UserSchema), // Pass Schema for validation
 });
 
-console.log(users[0].username); // TypeScript 會有自動補全
+console.log(users[0].username); // TypeScript provides auto-completion
 ```
 
-#### GET 請求 (無驗證)
+#### GET Request (Without Validation)
 
-如果你不需要執行時驗證，也可以直接使用泛型：
+If you don't need runtime validation, you can directly use generics:
 
 ```typescript
 const data = await client.get<any[]>({
@@ -73,73 +82,76 @@ const data = await client.get<any[]>({
 });
 ```
 
-#### POST (新增資料)
+#### POST (Creating Data)
 
 ```typescript
 const newUser = await client.post({
   endpoint: "/users",
   data: { username: "new_user", email: "test@example.com" },
-  schema: v.array(UserSchema), // PostgREST 通常回傳陣列
-  headers: { Prefer: "return=representation" }, // 告訴 PostgREST 回傳新增的資料
+  schema: v.array(UserSchema), // PostgREST typically returns arrays
+  headers: { Prefer: "return=representation" }, // Tell PostgREST to return the created data
 });
 ```
 
-## 📖 API 參考
+## 📖 API Reference
 
-所有方法都接收一個 **Options Object**。
+All methods accept an **Options Object**.
 
-### 共用選項 (Base Options)
+### Common Options (Base Options)
 
-所有請求方法 (`get`, `post`, `patch`, `delete`) 都支援以下屬性：
+All request methods (`get`, `post`, `patch`, `delete`) support the following properties:
 
-| 屬性 | 型別 | 說明 |
+| Property | Type | Description |
 | :--- | :--- | :--- |
-| `endpoint` | `string` | **必填**。API 路徑 (例如 `/users`)。 |
-| `schema` | `StandardSchema` | 選填。用於驗證回應資料的 Schema。若傳入，回傳型別將自動推斷。 |
-| `token` | `string` | 選填。覆寫預設的 Auth Token。 |
-| `headers` | `HeadersInit` | 選填。自定義 HTTP Headers。 |
-| `signal` | `AbortSignal` | 選填。用於取消請求。 |
-| ... | `RequestInit` | 支援所有原生 `fetch` 的選項。 |
+| `endpoint` | `string` | **Required**. API path (e.g., `/users`). |
+| `schema` | `StandardSchema` | Optional. Schema for validating response data. If provided, return type is automatically inferred. |
+| `token` | `string` | Optional. Override default Auth Token. |
+| `headers` | `HeadersInit` | Optional. Custom HTTP Headers. |
+| `signal` | `AbortSignal` | Optional. For request cancellation. |
+| ... | `RequestInit` | Supports all native `fetch` options. |
 
 ### `client.get(options)`
 
-用於讀取資料。
+Used for reading data.
 
-* **options.params**: `Record<string, string>` (選填) - URL 查詢參數。
-  * 範例：`{ select: '*', id: 'eq.1' }`
+* **options.params**: `Record<string, string | number | boolean | undefined | null>` (Optional)
+  * URL query parameters.
+  * Supports basic types, automatically converted to strings.
+  * If value is undefined or null, the parameter is automatically filtered and won't appear in the URL.
+  * Example: `{ select: '*', id: 'eq.1', active: true, offset: undefined }`
 
 ### `client.getFirst(options)`
 
-用於讀取**單筆**資料的輔助方法。它會自動加入 `limit=1`，並解開陣列回傳第一項。如果找不到資料會拋出錯誤。
+Helper method for reading a **single record**. It automatically adds `limit=1` and unwraps the array to return the first item. Throws an error if no data is found.
 
 ```typescript
 const user = await client.getFirst({
   endpoint: "/users",
   params: { id: "eq.123" },
-  schema: UserSchema, // 注意：這裡傳入單個物件的 Schema，而非陣列
+  schema: UserSchema, // Note: Pass the Schema for a single object, not an array
 });
 ```
 
 ### `client.post(options) / client.patch(options)`
 
-用於新增或修改資料。
+Used for creating or modifying data.
 
-* **options.data**: `object` (選填) - 要傳送的 JSON Body。
+* **options.data**: `object` (Optional) - JSON Body to send.
 
 ### `client.delete(options)`
 
-用於刪除資料。
+Used for deleting data.
 
-* **options.params**: `Record<string, string>` (選填) - 用於指定刪除條件。
+* **options.params**: `Record<string, string | number | boolean | undefined | null>` (Optional) - Used to specify deletion conditions.
 
 -----
 
-## ⚠️ 錯誤處理
+## ⚠️ Error Handling
 
-當 PostgREST 回傳非 2xx 的狀態碼時，Client 會拋出 `PostgrestClientError`。該錯誤物件包含伺服器回傳的詳細錯誤資訊。
+When PostgREST returns a non-2xx status code, the Client throws a `PostgrestClientError`. This error object contains detailed error information returned by the server.
 
 ```typescript
-import { PostgrestClientError } from "your-package-name";
+import { PostgrestClientError } from "@youmin1017/postgrest";
 
 try {
   await client.get({ endpoint: "/non-existent-table" });
@@ -154,12 +166,12 @@ try {
 }
 ```
 
-## Standard Schema 支援
+## Standard Schema Support
 
-本套件遵循 [Standard Schema V1](https://www.google.com/search?q=https://github.com/standard-schema/spec) 規範。這意味著你可以使用任何符合該規範的驗證庫，無需綁定特定套件：
+This package follows the [Standard Schema V1](https://github.com/standard-schema/spec) specification. This means you can use any validation library that conforms to this specification, without being locked into a specific package:
 
-* [Valibot](https://valibot.dev/) (推薦)
-* [Zod](https://zod.dev/) (需使用 `zod-standard-schema` wrapper 或 Zod v3.24+)
+* [Valibot](https://valibot.dev/) (Recommended)
+* [Zod](https://zod.dev/) (Requires `zod-standard-schema` wrapper or Zod v3.24+)
 * [ArkType](https://arktype.io/)
 
 -----

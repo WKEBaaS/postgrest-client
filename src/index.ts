@@ -19,11 +19,14 @@ interface BaseRequestOptions<
   schema?: TSchema; // 用於驗證回應
 }
 
+// 定義允許的參數值類型 (支援undefined 以便過濾)
+type ParamValue = string | number | boolean | undefined | null;
+
 // GET / DELETE 專用選項 (通常帶 Query String)
 export interface GetRequestOptions<
   TSchema extends StandardSchemaV1 = StandardSchemaV1,
 > extends BaseRequestOptions<TSchema> {
-  params?: Record<string, string>;
+  params?: Record<string, ParamValue>;
 }
 
 // POST / PATCH 專用選項 (通常帶 Body)
@@ -37,18 +40,15 @@ export class PostgrestClient {
   private baseURL: URL;
   private defaultToken: string | null = null;
 
-  // 建構子可以接收預設 token
   constructor(baseURL: string | URL, defaultToken: string | null = null) {
     this.baseURL = new URL(baseURL);
     this.defaultToken = defaultToken;
   }
 
-  // 允許隨時更新預設 token
   public setToken(token: string | null): void {
     this.defaultToken = token;
   }
 
-  // ... (validateData 方法保持不變) ...
   private async validateData<T extends StandardSchemaV1>(
     schema: T,
     data: unknown,
@@ -72,7 +72,7 @@ export class PostgrestClient {
   private async fetchWithAuth<T>(
     method: string,
     options: BaseRequestOptions & {
-      params?: Record<string, string>;
+      params?: Record<string, ParamValue>;
       data?: object;
     },
   ): Promise<T> {
@@ -80,11 +80,22 @@ export class PostgrestClient {
 
     // 1. 處理 URL 與 Query Params
     let urlString = endpoint;
-    if (params && Object.keys(params).length > 0) {
-      const searchParams = new URLSearchParams(params);
+
+    if (params) {
+      const searchParams = new URLSearchParams();
+
+      Object.entries(params).forEach(([key, value]) => {
+        if (value !== undefined && value !== null) {
+          searchParams.append(key, String(value));
+        }
+      });
+
       const queryString = searchParams.toString();
-      urlString += (urlString.includes("?") ? "&" : "?") + queryString;
+      if (queryString) {
+        urlString += (urlString.includes("?") ? "&" : "?") + queryString;
+      }
     }
+
     const url = new URL(urlString.replace(/^\//, ""), this.baseURL);
 
     // 2. 處理 Headers
@@ -168,7 +179,9 @@ export class PostgrestClient {
   ): Promise<T>;
 
   public async getFirst(options: GetRequestOptions) {
-    const allParams = { ...options.params, limit: "1" };
+    // 修改：確保即使 options.params 為 undefined 也能正常運作
+    const baseParams = options.params || {};
+    const allParams = { ...baseParams, limit: "1" };
 
     // 呼叫內部 fetch，但不傳 schema，因為我們要先解開陣列
     const data = await this.fetchWithAuth<unknown[]>("GET", {
