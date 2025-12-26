@@ -33,11 +33,13 @@ export interface PostRequestOptions<
 }
 
 export class PostgrestClient {
-  private baseURL: URL;
+  // [修改 1] baseURL 改為儲存原始輸入，不強制的 URL 物件
+  private baseURL: string | URL;
   private defaultToken: string | null = null;
 
   constructor(baseURL: string | URL, defaultToken: string | null = null) {
-    this.baseURL = new URL(baseURL);
+    // [修改 2] 移除 new URL()。這裡不再進行解析，防止 Build 時崩潰
+    this.baseURL = baseURL;
     this.defaultToken = defaultToken;
   }
 
@@ -74,25 +76,32 @@ export class PostgrestClient {
   ): Promise<T> {
     const { endpoint, token, params, data, schema, ...fetchOptions } = options;
 
-    // 1. 處理 URL 與 Query Params
-    let urlString = endpoint;
-
-    if (params) {
-      const searchParams = new URLSearchParams();
-
-      Object.entries(params).forEach(([key, value]) => {
-        if (value !== undefined && value !== null) {
-          searchParams.append(key, String(value));
-        }
-      });
-
-      const queryString = searchParams.toString();
-      if (queryString) {
-        urlString += (urlString.includes("?") ? "&" : "?") + queryString;
+    // [修改 3] URL 解析邏輯移動到請求當下
+    let url: URL;
+    try {
+      // 如果 this.baseURL 是 undefined (例如 build 時 env 沒抓到)，這裡會 throw
+      // 但因為是在 Runtime (呼叫 fetch 時) 才執行，所以不會影響 Build
+      if (!this.baseURL) {
+        throw new Error("Base URL is not defined");
       }
+      const base = new URL(this.baseURL);
+      // 處理 endpoint 開頭的斜線，避免雙重斜線問題
+      const cleanEndpoint = endpoint.replace(/^\//, "");
+      url = new URL(cleanEndpoint, base);
+    } catch (error) {
+      // 這裡可以捕捉到 "Invalid URL" 的錯誤，並提供更清楚的訊息
+      const msg = error instanceof Error ? error.message : String(error);
+      throw new Error(`Failed to construct URL (base: ${this.baseURL}, endpoint: ${endpoint}): ${msg}`);
     }
 
-    const url = new URL(urlString.replace(/^\//, ""), this.baseURL);
+    // 1. 處理 Query Params (直接操作 URL 物件)
+    if (params) {
+      Object.entries(params).forEach(([key, value]) => {
+        if (value !== undefined && value !== null) {
+          url.searchParams.append(key, String(value));
+        }
+      });
+    }
 
     // 2. 處理 Headers
     const headers = new Headers(fetchOptions.headers || {});
@@ -150,15 +159,14 @@ export class PostgrestClient {
   }
 
   // --- 公開 API (使用重載 Overload) ---
-  // 使用 Options Object 後，Overload 會變得更乾淨
 
   // GET
   public get<S extends StandardSchemaV1>(
-    options: GetRequestOptions<S> & { schema: S }, // 強制要求 schema 存在的情況
+    options: GetRequestOptions<S> & { schema: S },
   ): Promise<StandardSchemaV1.InferOutput<S>>;
 
   public get<T = unknown>(
-    options: GetRequestOptions, // 沒有 schema 的情況
+    options: GetRequestOptions,
   ): Promise<T>;
 
   public get(options: GetRequestOptions) {
@@ -175,15 +183,13 @@ export class PostgrestClient {
   ): Promise<T>;
 
   public async getFirst(options: GetRequestOptions) {
-    // 修改：確保即使 options.params 為 undefined 也能正常運作
     const baseParams = options.params || {};
     const allParams = { ...baseParams, limit: "1" };
 
-    // 呼叫內部 fetch，但不傳 schema，因為我們要先解開陣列
     const data = await this.fetchWithAuth<unknown[]>("GET", {
       ...options,
       params: allParams,
-      schema: undefined, // 暫時移除 schema
+      schema: undefined,
     });
 
     if (Array.isArray(data) && data.length > 0) {
@@ -237,9 +243,13 @@ export class PostgrestClient {
   }
 }
 
+// [修改 4] 允許 createPostgrestClient 接收 undefined
+// 這讓你在 SvelteKit 中可以直接傳入 env.URL 即使它可能是 undefined
 export function createPostgrestClient(
-  baseURL: string | URL,
+  baseURL: string | URL | undefined,
   defaultToken: string | null = null,
 ): PostgrestClient {
-  return new PostgrestClient(baseURL, defaultToken);
+  // 如果傳入 undefined，我們給一個空字串或保留 undefined，
+  // 錯誤會在呼叫 API (fetchWithAuth) 時才拋出
+  return new PostgrestClient(baseURL || "", defaultToken);
 }
