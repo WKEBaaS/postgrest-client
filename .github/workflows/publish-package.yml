@@ -22,8 +22,8 @@ jobs:
       # 設置 Node.js（發布到 NPM 需要）
       - uses: actions/setup-node@v4
         with:
-          node-version: "20"
+          node-version: "24"
           registry-url: "https://registry.npmjs.org"
 
       # 發布到 NPM
-      - run: npm publish
+      - run: npm publish --provenance
