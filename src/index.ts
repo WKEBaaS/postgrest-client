@@ -1,10 +1,6 @@
-import * as v from "valibot";
 import type { StandardSchemaV1 } from "@standard-schema/spec";
-import {
-  POSTGREST_ERROR_TYPE,
-  PostgrestClientError,
-  postgrestErrorSchema,
-} from "./error";
+import * as v from "valibot";
+import { POSTGREST_ERROR_TYPE, PostgrestClientError, postgrestErrorSchema } from "./error";
 
 export { POSTGREST_ERROR_TYPE, PostgrestClientError };
 
@@ -239,4 +235,11 @@ export class PostgrestClient {
   public delete(options: GetRequestOptions) {
     return this.fetchWithAuth("DELETE", options);
   }
+}
+
+export function createPostgrestClient(
+  baseURL: string | URL,
+  defaultToken: string | null = null,
+): PostgrestClient {
+  return new PostgrestClient(baseURL, defaultToken);
 }
