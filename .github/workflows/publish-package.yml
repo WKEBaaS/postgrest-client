@@ -5,6 +5,10 @@ on:
     tags:
       - "v*.*.*"
 
+permissions:
+  id-token: write # Required for OIDC
+  contents: read
+
 jobs:
   build:
     runs-on: ubuntu-latest
@@ -14,3 +18,12 @@ jobs:
 
       - run: bun install
       - run: bun run build
+
+      # 設置 Node.js（發布到 NPM 需要）
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          registry-url: "https://registry.npmjs.org"
+
+      # 發布到 NPM
+      - run: npm publish

@@ -1,6 +1,6 @@
 {
   "name": "@wke-baas/postgrest-client",
-  "version": "0.2.4",
+  "version": "0.2.5",
   "description": "A simple postgrest client integrated with standard schema for validating responses.",
   "license": "MIT",
   "files": [
