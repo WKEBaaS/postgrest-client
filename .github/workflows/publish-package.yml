@@ -10,7 +10,7 @@ permissions:
   contents: read
 
 jobs:
-  build:
+  publish:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -26,4 +26,4 @@ jobs:
           registry-url: "https://registry.npmjs.org"
 
       # 發布到 NPM
-      - run: npm publish --provenance
+      - run: npm publish
